@@ -1,0 +1,583 @@
+package com.example.ui.screens
+
+import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.FormatQuote
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.TextFlowApplication
+import com.example.ui.MainViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(
+    viewModel: MainViewModel,
+    onNavigateBack: () -> Unit,
+    onNavigateToModelManager: () -> Unit
+) {
+    val context = LocalContext.current
+    val sourceLang by viewModel.sourceLanguage.collectAsState()
+    val targetLang by viewModel.targetLanguage.collectAsState()
+    val bubbleSize by viewModel.bubbleSize.collectAsState()
+    val hapticEnabled by viewModel.hapticEnabled.collectAsState()
+    val autoPunctuation by viewModel.autoPunctuation.collectAsState()
+    val themeMode by viewModel.themeMode.collectAsState()
+
+    var showSourceLangDialog by remember { mutableStateOf(false) }
+    var showTargetLangDialog by remember { mutableStateOf(false) }
+    var showBubbleSizeDialog by remember { mutableStateOf(false) }
+    var showThemeDialog by remember { mutableStateOf(false) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
+    var showClearHistoryDialog by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Settings", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Section 1: Languages
+            SettingsSectionHeader(title = "Languages & Translation")
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    SettingsRow(
+                        icon = Icons.Default.Translate,
+                        title = "Default Source Language",
+                        subtitle = when (sourceLang) {
+                            "hi" -> "Hindi (हिंदी)"
+                            "hinglish" -> "Hinglish (Hindi in English Script)"
+                            else -> "English (en-IN)"
+                        },
+                        onClick = { showSourceLangDialog = true }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    SettingsRow(
+                        icon = Icons.Default.Translate,
+                        title = "Default Output Language",
+                        subtitle = if (targetLang == "en") "English (US / Global)" else "Hindi (हिंदी)",
+                        onClick = { showTargetLangDialog = true }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    SettingsRow(
+                        icon = Icons.Default.Download,
+                        title = "Offline Translation Pack",
+                        subtitle = "Manage Hindi-English offline engine",
+                        onClick = onNavigateToModelManager
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Section 2: Floating Overlay & Controls
+            SettingsSectionHeader(title = "Floating Overlay")
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    SettingsRow(
+                        icon = Icons.Default.Layers,
+                        title = "Floating Bubble Size",
+                        subtitle = when (bubbleSize) {
+                            "small" -> "Compact (46dp)"
+                            "large" -> "Large (66dp)"
+                            else -> "Medium (56dp - Default)"
+                        },
+                        onClick = { showBubbleSizeDialog = true }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    SettingsRow(
+                        icon = Icons.Default.RestartAlt,
+                        title = "Reset Bubble Position",
+                        subtitle = "Restore bubble to default screen coordinate",
+                        onClick = {
+                            CoroutineScope(Dispatchers.IO).launch {
+                                TextFlowApplication.instance.preferencesRepository.saveBubblePosition(100, 300)
+                            }
+                            Toast.makeText(context, "Bubble position reset", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Section 3: Speech & Formatting
+            SettingsSectionHeader(title = "Voice & Formatting")
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    SettingsSwitchRow(
+                        icon = Icons.Default.FormatQuote,
+                        title = "Auto Capitalize & Punctuate",
+                        subtitle = "Format English sentences with capitalization and periods",
+                        checked = autoPunctuation,
+                        onCheckedChange = { viewModel.setAutoPunctuationPref(it) }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    SettingsSwitchRow(
+                        icon = Icons.Default.Vibration,
+                        title = "Haptic Feedback",
+                        subtitle = "Vibrate on mic start, stop, and text copy",
+                        checked = hapticEnabled,
+                        onCheckedChange = { viewModel.setHapticPref(it) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Section 4: Appearance & System
+            SettingsSectionHeader(title = "Appearance")
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                SettingsRow(
+                    icon = Icons.Default.DarkMode,
+                    title = "Theme",
+                    subtitle = when (themeMode) {
+                        "dark" -> "Dark Mode"
+                        "light" -> "Light Mode"
+                        else -> "System Default"
+                    },
+                    onClick = { showThemeDialog = true }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Section 5: Privacy & Data
+            SettingsSectionHeader(title = "Privacy & Data")
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    SettingsRow(
+                        icon = Icons.Default.Security,
+                        title = "Privacy Policy & Zero-Tracking",
+                        subtitle = "100% on-device translation • No cloud profiling",
+                        onClick = { showPrivacyDialog = true }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    SettingsRow(
+                        icon = Icons.Default.DeleteSweep,
+                        title = "Clear Translation History",
+                        subtitle = "Erase all saved history entries on this device",
+                        onClick = { showClearHistoryDialog = true }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(30.dp))
+        }
+    }
+
+    // Source Lang Dialog
+    if (showSourceLangDialog) {
+        val options = listOf(
+            "hi" to "Hindi (हिंदी)",
+            "hinglish" to "Hinglish (Conversational Mix)",
+            "en" to "English (Indian / International)"
+        )
+        AlertDialog(
+            onDismissRequest = { showSourceLangDialog = false },
+            title = { Text("Select Default Source Language") },
+            text = {
+                Column {
+                    options.forEach { (code, label) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setSourceLang(code)
+                                    showSourceLangDialog = false
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = sourceLang == code,
+                                onClick = {
+                                    viewModel.setSourceLang(code)
+                                    showSourceLangDialog = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(label)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showSourceLangDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Target Lang Dialog
+    if (showTargetLangDialog) {
+        val options = listOf(
+            "en" to "English (Default)",
+            "hi" to "Hindi (हिंदी)"
+        )
+        AlertDialog(
+            onDismissRequest = { showTargetLangDialog = false },
+            title = { Text("Select Default Output Language") },
+            text = {
+                Column {
+                    options.forEach { (code, label) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setTargetLang(code)
+                                    showTargetLangDialog = false
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = targetLang == code,
+                                onClick = {
+                                    viewModel.setTargetLang(code)
+                                    showTargetLangDialog = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(label)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showTargetLangDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Bubble Size Dialog
+    if (showBubbleSizeDialog) {
+        val options = listOf(
+            "small" to "Small (46dp)",
+            "medium" to "Medium (56dp - Recommended)",
+            "large" to "Large (66dp)"
+        )
+        AlertDialog(
+            onDismissRequest = { showBubbleSizeDialog = false },
+            title = { Text("Floating Bubble Size") },
+            text = {
+                Column {
+                    options.forEach { (code, label) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setBubbleSizePref(code)
+                                    showBubbleSizeDialog = false
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = bubbleSize == code,
+                                onClick = {
+                                    viewModel.setBubbleSizePref(code)
+                                    showBubbleSizeDialog = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(label)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showBubbleSizeDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Theme Dialog
+    if (showThemeDialog) {
+        val options = listOf(
+            "system" to "System Default",
+            "dark" to "Dark Mode",
+            "light" to "Light Mode"
+        )
+        AlertDialog(
+            onDismissRequest = { showThemeDialog = false },
+            title = { Text("Choose Theme") },
+            text = {
+                Column {
+                    options.forEach { (code, label) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setThemeModePref(code)
+                                    showThemeDialog = false
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = themeMode == code,
+                                onClick = {
+                                    viewModel.setThemeModePref(code)
+                                    showThemeDialog = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(label)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showThemeDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Privacy Dialog
+    if (showPrivacyDialog) {
+        AlertDialog(
+            onDismissRequest = { showPrivacyDialog = false },
+            title = { Text("TextFlow Privacy Policy") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        text = "TextFlow is built with complete user privacy as its core principle:\n\n" +
+                                "1. No Secret Recording: Audio is strictly captured only when you explicitly press the microphone icon.\n\n" +
+                                "2. Local Machine Translation: Translation runs on-device via local ML models. No text is sent to OpenAI, Gemini, or third-party servers.\n\n" +
+                                "3. No External APIs: Does not use paid third-party translation APIs.\n\n" +
+                                "4. No Screen Sniffing: The overlay window does not read or intercept text from WhatsApp, Instagram, or other apps.\n\n" +
+                                "5. Local Storage: History is stored strictly in your device's private SQLite database and can be erased anytime.",
+                        style = MaterialTheme.typography.bodySmall,
+                        lineHeight = 18.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showPrivacyDialog = false }) {
+                    Text("Understood")
+                }
+            }
+        )
+    }
+
+    // Clear History Dialog
+    if (showClearHistoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearHistoryDialog = false },
+            title = { Text("Clear All History?") },
+            text = { Text("This will permanently remove all your saved translations from this device.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.clearAllHistory()
+                        showClearHistoryDialog = false
+                        Toast.makeText(context, "History erased", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Clear All")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearHistoryDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun SettingsSectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+    )
+}
+
+@Composable
+fun SettingsRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+            Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.size(14.dp)
+        )
+    }
+}
+
+@Composable
+fun SettingsSwitchRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+            Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+    }
+}
