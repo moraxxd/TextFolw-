@@ -15,6 +15,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,16 +32,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Input
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -49,6 +52,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -72,14 +76,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.languages.SourceLanguage
+import com.example.data.languages.TargetLanguage
 import com.example.data.translation.ModelDownloadState
+import com.example.service.ime.TextFlowInputMethodService
 import com.example.service.overlay.AudioWaveform
 import com.example.ui.MainViewModel
 import com.example.ui.theme.MicRecordingGlow
@@ -97,6 +103,7 @@ fun HomeScreen(
     onNavigateToOverlayPermission: () -> Unit,
     onNavigateToMicPermission: () -> Unit,
     onNavigateToModelManager: () -> Unit,
+    onNavigateToTribalTesting: () -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToSettings: () -> Unit
 ) {
@@ -107,6 +114,9 @@ fun HomeScreen(
     val modelState by viewModel.modelDownloadState.collectAsState()
     val isModelDownloaded = modelState is ModelDownloadState.Downloaded
 
+    val sourceLang by viewModel.sourceLanguage.collectAsState()
+    val targetLang by viewModel.targetLanguage.collectAsState()
+
     val isListening by viewModel.inAppListening.collectAsState()
     val soundLevel by viewModel.inAppSoundLevel.collectAsState()
     val inAppRecognized by viewModel.inAppRecognized.collectAsState()
@@ -115,6 +125,7 @@ fun HomeScreen(
     val isTranslating by viewModel.inAppIsTranslating.collectAsState()
 
     var copyConfirmed by remember { mutableStateOf(false) }
+    var insertConfirmed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -145,6 +156,12 @@ fun HomeScreen(
                 },
                 actions = {
                     IconButton(
+                        onClick = onNavigateToTribalTesting,
+                        modifier = Modifier.testTag("nav_tribal_testing_btn")
+                    ) {
+                        Icon(imageVector = Icons.Default.RecordVoiceOver, contentDescription = "Tribal Testing")
+                    }
+                    IconButton(
                         onClick = onNavigateToHistory,
                         modifier = Modifier.testTag("nav_history_btn")
                     ) {
@@ -171,7 +188,7 @@ fun HomeScreen(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Tagline banner
             Text(
@@ -181,13 +198,87 @@ fun HomeScreen(
                 textAlign = TextAlign.Center
             )
             Text(
-                text = "Floating voice-to-text overlay for WhatsApp, Instagram & all chat apps",
+                text = "Tribal Voice-to-Text & Translation (Gondi • Kolami • Hindi • Marathi)",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Tribal Language Feature Banner Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onNavigateToTribalTesting),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
+                ),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.tertiary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.RecordVoiceOver,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Tribal Language Suite",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(MaterialTheme.colorScheme.tertiary)
+                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                ) {
+                                    Text("ACTIVE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                            }
+                            Text(
+                                text = "Gondi & Kolami -> English & Marathi output",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                    }
+
+                    Icon(
+                        imageVector = Icons.Default.Assessment,
+                        contentDescription = "Test Bench",
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Primary Toggle Card: Floating Microphone Overlay
             Card(
@@ -205,7 +296,7 @@ fun HomeScreen(
                     androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
                 else null
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -235,12 +326,12 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = "Floating Overlay",
+                                    text = "Floating Overlay Bubble",
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = if (isServiceActive) "Active over other apps" else "Disabled - Tap to enable",
+                                    text = if (isServiceActive) "Active over WhatsApp, Instagram, etc." else "Disabled - Tap switch to start",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = if (isServiceActive) SuccessGreen else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -267,7 +358,7 @@ fun HomeScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     // Permission & Model Status Pills
                     Row(
@@ -287,7 +378,7 @@ fun HomeScreen(
                             modifier = Modifier.weight(1f)
                         )
                         StatusChip(
-                            title = "Offline Model",
+                            title = "Offline Models",
                             isOk = isModelDownloaded,
                             onClick = onNavigateToModelManager,
                             modifier = Modifier.weight(1f)
@@ -296,50 +387,7 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Quick App Overview Banner (How to use)
-            OutlinedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.secondaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.GraphicEq,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "How to use TextFlow:",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                        Text(
-                            text = "1. Enable Floating Overlay\n2. Open WhatsApp, Telegram, or any chat\n3. Tap floating mic, speak Hindi/Hinglish\n4. Copy English text with 1 tap and paste!",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // In-App Speech & Translation Playground Section
             Card(
@@ -367,17 +415,53 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "In-App Voice Test Bench",
+                            text = "Voice Test Bench",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
                         Text(
-                            text = "Hindi -> English",
+                            text = "${SourceLanguage.fromCode(sourceLang).displayName} -> ${TargetLanguage.fromCode(targetLang).displayName}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.secondary
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Language Quick Selectors in In-App Bench
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FilterChip(
+                            selected = sourceLang == "gon",
+                            onClick = { viewModel.setSourceLang("gon") },
+                            label = { Text("Gondi", fontSize = 11.sp) }
+                        )
+                        FilterChip(
+                            selected = sourceLang == "kfb",
+                            onClick = { viewModel.setSourceLang("kfb") },
+                            label = { Text("Kolami", fontSize = 11.sp) }
+                        )
+                        FilterChip(
+                            selected = sourceLang == "hi",
+                            onClick = { viewModel.setSourceLang("hi") },
+                            label = { Text("Hindi", fontSize = 11.sp) }
+                        )
+                        FilterChip(
+                            selected = sourceLang == "mr",
+                            onClick = { viewModel.setSourceLang("mr") },
+                            label = { Text("Marathi", fontSize = 11.sp) }
+                        )
+                        FilterChip(
+                            selected = sourceLang == "en",
+                            onClick = { viewModel.setSourceLang("en") },
+                            label = { Text("English", fontSize = 11.sp) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     // Mic test button
                     val infiniteTransition = rememberInfiniteTransition(label = "in_app_pulse")
@@ -469,7 +553,7 @@ fun HomeScreen(
                         ) {
                             if (inAppRecognized.isNotBlank()) {
                                 Text(
-                                    text = "Recognized Hindi / Hinglish:",
+                                    text = "Recognized (${SourceLanguage.fromCode(sourceLang).displayName}):",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -482,7 +566,7 @@ fun HomeScreen(
 
                             if (inAppTranslated.isNotBlank()) {
                                 Text(
-                                    text = "Converted English:",
+                                    text = "Converted (${TargetLanguage.fromCode(targetLang).displayName}):",
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.secondary
                                 )
@@ -491,30 +575,58 @@ fun HomeScreen(
                                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(10.dp))
 
-                                Button(
-                                    onClick = {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("TextFlow", inAppTranslated))
-                                        copyConfirmed = true
-                                        scope.launch {
-                                            delay(2000)
-                                            copyConfirmed = false
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (copyConfirmed) SuccessGreen else MaterialTheme.colorScheme.primary
-                                    ),
-                                    modifier = Modifier.fillMaxWidth()
+                                // Action Buttons: Insert into App & Copy
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = if (copyConfirmed) Icons.Default.Check else Icons.Default.ContentCopy,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(if (copyConfirmed) "Copied!" else "Copy Converted English")
+                                    // Direct Insert
+                                    Button(
+                                        onClick = {
+                                            TextFlowInputMethodService.pendingInsertText.value = inAppTranslated
+                                            val ok = TextFlowInputMethodService.insertDirectly(inAppTranslated)
+                                            if (ok) {
+                                                insertConfirmed = true
+                                                scope.launch {
+                                                    delay(2000)
+                                                    insertConfirmed = false
+                                                }
+                                                Toast.makeText(context, "Inserted via TextFlow Keyboard!", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                clipboard.setPrimaryClip(ClipData.newPlainText("TextFlow", inAppTranslated))
+                                                Toast.makeText(context, "Copied to clipboard (Enable TextFlow Keyboard to insert in 1 tap)", Toast.LENGTH_LONG).show()
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (insertConfirmed) SuccessGreen else MaterialTheme.colorScheme.primary
+                                        ),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(imageVector = if (insertConfirmed) Icons.Default.Check else Icons.Default.Input, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(if (insertConfirmed) "Inserted!" else "Insert Text")
+                                    }
+
+                                    // Copy
+                                    OutlinedButton(
+                                        onClick = {
+                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            clipboard.setPrimaryClip(ClipData.newPlainText("TextFlow", inAppTranslated))
+                                            copyConfirmed = true
+                                            scope.launch {
+                                                delay(2000)
+                                                copyConfirmed = false
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(imageVector = if (copyConfirmed) Icons.Default.Check else Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(if (copyConfirmed) "Copied!" else "Copy")
+                                    }
                                 }
                             }
                         }
@@ -524,11 +636,21 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Action Quick Links: Model Setup, History, Settings
+            // Action Quick Links: Tribal Testing, Model Setup, History
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                OutlinedButton(
+                    onClick = onNavigateToTribalTesting,
+                    modifier = Modifier.weight(1.1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.RecordVoiceOver, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Tribal Testing", fontSize = 11.sp)
+                }
+
                 OutlinedButton(
                     onClick = onNavigateToModelManager,
                     modifier = Modifier.weight(1f),
@@ -536,17 +658,17 @@ fun HomeScreen(
                 ) {
                     Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Model Setup", fontSize = 12.sp)
+                    Text("Models", fontSize = 11.sp)
                 }
 
                 OutlinedButton(
                     onClick = onNavigateToHistory,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(0.9f),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(imageVector = Icons.Default.History, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("History", fontSize = 12.sp)
+                    Text("History", fontSize = 11.sp)
                 }
             }
 

@@ -21,6 +21,7 @@ import com.example.ui.screens.OnboardingScreen
 import com.example.ui.screens.OverlayPermissionScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.TranslationModelScreen
+import com.example.ui.screens.TribalTestingScreen
 import com.example.ui.theme.TextFlowTheme
 
 class MainActivity : ComponentActivity() {
@@ -85,6 +86,9 @@ fun TextFlowApp(viewModel: MainViewModel) {
                 onNavigateToModelManager = {
                     navController.navigate(Screen.TranslationModel.route)
                 },
+                onNavigateToTribalTesting = {
+                    navController.navigate(Screen.TribalTesting.route)
+                },
                 onNavigateToHistory = {
                     navController.navigate(Screen.History.route)
                 },
@@ -115,6 +119,13 @@ fun TextFlowApp(viewModel: MainViewModel) {
             )
         }
 
+        composable(Screen.TribalTesting.route) {
+            TribalTestingScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
         composable(Screen.History.route) {
             HistoryScreen(
                 viewModel = viewModel,
@@ -128,6 +139,9 @@ fun TextFlowApp(viewModel: MainViewModel) {
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToModelManager = {
                     navController.navigate(Screen.TranslationModel.route)
+                },
+                onNavigateToTribalTesting = {
+                    navController.navigate(Screen.TribalTesting.route)
                 }
             )
         }

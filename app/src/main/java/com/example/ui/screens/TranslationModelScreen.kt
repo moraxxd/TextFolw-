@@ -28,8 +28,8 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -37,6 +37,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -62,11 +63,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.TextFlowApplication
+import com.example.data.languages.SourceLanguage
+import com.example.data.languages.TargetLanguage
 import com.example.data.translation.ModelDownloadState
+import com.example.data.translation.tribal.TribalDownloadStatus
 import com.example.ui.MainViewModel
 import com.example.ui.theme.PrimaryDark
 import com.example.ui.theme.SecondaryDark
@@ -83,14 +86,22 @@ fun TranslationModelScreen(
     val scope = rememberCoroutineScope()
     val modelState by viewModel.modelDownloadState.collectAsState()
 
-    var testInput by remember { mutableStateOf("नमस्ते, आप कैसे हो?") }
+    val tribalManager = remember { TextFlowApplication.instance.translationManager.tribalModelManager }
+    val gondiInstalled by tribalManager.isGondiInstalled.collectAsState(initial = true)
+    val kolamiInstalled by tribalManager.isKolamiInstalled.collectAsState(initial = true)
+    val gondiStatus by tribalManager.gondiStatus.collectAsState()
+    val kolamiStatus by tribalManager.kolamiStatus.collectAsState()
+
+    var testInput by remember { mutableStateOf("सेवाल, कुशियता मन्ता?") }
+    var testSourceLang by remember { mutableStateOf("gon") }
+    var testTargetLang by remember { mutableStateOf("en") }
     var testResult by remember { mutableStateOf("") }
     var isTestingTranslation by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Offline Translation Engine", fontWeight = FontWeight.Bold) },
+                title = { Text("Language Model Manager", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -106,180 +117,112 @@ fun TranslationModelScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Main Model Status Card
-            Card(
+            // Storage Overview Header
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("translation_model_card"),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                ),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    when (modelState) {
-                        is ModelDownloadState.Downloaded -> SuccessGreen.copy(alpha = 0.4f)
-                        is ModelDownloadState.Downloading -> MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-                        else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-                    }
-                )
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    when (modelState) {
-                                        is ModelDownloadState.Downloaded -> SuccessGreen.copy(alpha = 0.2f)
-                                        is ModelDownloadState.Downloading -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                        else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-                                    }
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = when (modelState) {
-                                    is ModelDownloadState.Downloaded -> Icons.Default.CheckCircle
-                                    is ModelDownloadState.Downloading -> Icons.Default.CloudDownload
-                                    else -> Icons.Default.Download
-                                },
-                                contentDescription = null,
-                                tint = when (modelState) {
-                                    is ModelDownloadState.Downloaded -> SuccessGreen
-                                    is ModelDownloadState.Downloading -> MaterialTheme.colorScheme.primary
-                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(14.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Hindi <-> English Offline Pack",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Text(
-                                text = when (modelState) {
-                                    is ModelDownloadState.Downloaded -> "Installed (~30 MB) • 100% Offline"
-                                    is ModelDownloadState.Downloading -> "Downloading model files..."
-                                    is ModelDownloadState.NotDownloaded -> "Not downloaded (~30 MB required)"
-                                    is ModelDownloadState.Error -> "Download error occurred"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = when (modelState) {
-                                    is ModelDownloadState.Downloaded -> SuccessGreen
-                                    is ModelDownloadState.Downloading -> MaterialTheme.colorScheme.primary
-                                    is ModelDownloadState.Error -> MaterialTheme.colorScheme.error
-                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    if (modelState is ModelDownloadState.Downloading) {
-                        LinearProgressIndicator(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(CircleShape)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-
-                    // Download / Delete Actions
-                    when (modelState) {
-                        is ModelDownloadState.Downloaded -> {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = {
-                                        viewModel.deleteOfflineModel()
-                                        Toast.makeText(context, "Model deleted", Toast.LENGTH_SHORT).show()
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        contentColor = MaterialTheme.colorScheme.error
-                                    )
-                                ) {
-                                    Icon(imageVector = Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Remove Model", fontSize = 12.sp)
-                                }
-
-                                Button(
-                                    onClick = {
-                                        viewModel.downloadOfflineModel(
-                                            onSuccess = { Toast.makeText(context, "Model verified", Toast.LENGTH_SHORT).show() }
-                                        )
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
-                                ) {
-                                    Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Re-verify", fontSize = 12.sp)
-                                }
-                            }
-                        }
-
-                        is ModelDownloadState.Downloading -> {
-                            Text(
-                                text = "Please wait while the offline translation model is being downloaded to your device storage...",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        else -> {
-                            Button(
-                                onClick = {
-                                    viewModel.downloadOfflineModel(
-                                        onSuccess = {
-                                            Toast.makeText(context, "Model downloaded successfully!", Toast.LENGTH_LONG).show()
-                                        },
-                                        onError = { error ->
-                                            Toast.makeText(context, "Download failed: $error", Toast.LENGTH_LONG).show()
-                                        }
-                                    )
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
-                                    .testTag("btn_download_model"),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                            ) {
-                                Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Download Offline Pack (Free ~30 MB)", fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
+                Icon(
+                    imageVector = Icons.Default.Storage,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Offline On-Device Language Packs",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
             }
+            Text(
+                text = "Models run 100% locally on your phone without cloud services or external APIs.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth()
+            )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Test Translation Sandbox
+            // 1. Gondi Tribal Language Pack Card
+            LanguagePackCard(
+                title = "Gondi Language Pack",
+                subtitle = "Central Dravidian (Vidarbha, MP, Telangana)",
+                sizeMb = 18,
+                isInstalled = gondiInstalled,
+                downloadStatus = gondiStatus,
+                isTribal = true,
+                onDownload = {
+                    tribalManager.downloadGondiPack(
+                        onSuccess = { Toast.makeText(context, "Gondi Pack ready!", Toast.LENGTH_SHORT).show() },
+                        onError = { Toast.makeText(context, "Download failed: $it", Toast.LENGTH_SHORT).show() }
+                    )
+                },
+                onDelete = {
+                    tribalManager.deleteGondiPack()
+                    Toast.makeText(context, "Gondi Pack removed", Toast.LENGTH_SHORT).show()
+                }
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 2. Kolami Tribal Language Pack Card
+            LanguagePackCard(
+                title = "Kolami Language Pack",
+                subtitle = "Kolam Tribe (Yavatmal, Adilabad)",
+                sizeMb = 14,
+                isInstalled = kolamiInstalled,
+                downloadStatus = kolamiStatus,
+                isTribal = true,
+                onDownload = {
+                    tribalManager.downloadKolamiPack(
+                        onSuccess = { Toast.makeText(context, "Kolami Pack ready!", Toast.LENGTH_SHORT).show() },
+                        onError = { Toast.makeText(context, "Download failed: $it", Toast.LENGTH_SHORT).show() }
+                    )
+                },
+                onDelete = {
+                    tribalManager.deleteKolamiPack()
+                    Toast.makeText(context, "Kolami Pack removed", Toast.LENGTH_SHORT).show()
+                }
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 3. Hindi-English Indic Model Card
+            LanguagePackCard(
+                title = "Hindi <-> English Offline Pack",
+                subtitle = "Standard Hindi machine translation pack",
+                sizeMb = 30,
+                isInstalled = modelState is ModelDownloadState.Downloaded,
+                downloadStatus = when (modelState) {
+                    is ModelDownloadState.Downloaded -> TribalDownloadStatus.Installed
+                    is ModelDownloadState.Downloading -> TribalDownloadStatus.Downloading(0.5f)
+                    is ModelDownloadState.Error -> TribalDownloadStatus.Error((modelState as ModelDownloadState.Error).error)
+                    else -> TribalDownloadStatus.Idle
+                },
+                isTribal = false,
+                onDownload = {
+                    viewModel.downloadOfflineModel(
+                        onSuccess = { Toast.makeText(context, "Hindi model ready!", Toast.LENGTH_SHORT).show() },
+                        onError = { Toast.makeText(context, "Download failed: $it", Toast.LENGTH_SHORT).show() }
+                    )
+                },
+                onDelete = {
+                    viewModel.deleteOfflineModel()
+                    Toast.makeText(context, "Hindi model deleted", Toast.LENGTH_SHORT).show()
+                }
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Interactive Test Bench
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -293,25 +236,34 @@ fun TranslationModelScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Test Offline Translation Engine",
+                        text = "Offline Translation Sandbox",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     Text(
-                        text = "Test Hindi or Hinglish text conversion directly",
+                        text = "Verify translation directly across Gondi, Kolami, Marathi and English",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                    // Preset buttons
+                    // Preset Quick Buttons
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        PresetChip("नमस्ते, आप कैसे हो?") { testInput = it }
-                        PresetChip("kya haal hai?") { testInput = it }
-                        PresetChip("main theek hoon") { testInput = it }
+                        PresetChip("सेवाल (Gondi)") {
+                            testInput = "सेवाल, कुशियता मन्ता?"
+                            testSourceLang = "gon"
+                        }
+                        PresetChip("राम-राम (Kolami)") {
+                            testInput = "राम-राम, आम् कोलामी पाटा ककडा"
+                            testSourceLang = "kfb"
+                        }
+                        PresetChip("गातो तिनका") {
+                            testInput = "येर सीम, गातो तिनका"
+                            testSourceLang = "gon"
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -319,10 +271,52 @@ fun TranslationModelScreen(
                     OutlinedTextField(
                         value = testInput,
                         onValueChange = { testInput = it },
-                        label = { Text("Input Hindi or Hinglish") },
+                        label = { Text("Input Phrase") },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Source & Target selector in sandbox
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            FilterChip(
+                                selected = testSourceLang == "gon",
+                                onClick = { testSourceLang = "gon" },
+                                label = { Text("Gondi", fontSize = 10.sp) }
+                            )
+                            FilterChip(
+                                selected = testSourceLang == "kfb",
+                                onClick = { testSourceLang = "kfb" },
+                                label = { Text("Kolami", fontSize = 10.sp) }
+                            )
+                            FilterChip(
+                                selected = testSourceLang == "hi",
+                                onClick = { testSourceLang = "hi" },
+                                label = { Text("Hindi", fontSize = 10.sp) }
+                            )
+                        }
+
+                        Text("->", fontWeight = FontWeight.Bold)
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            FilterChip(
+                                selected = testTargetLang == "en",
+                                onClick = { testTargetLang = "en" },
+                                label = { Text("English", fontSize = 10.sp) }
+                            )
+                            FilterChip(
+                                selected = testTargetLang == "mr",
+                                onClick = { testTargetLang = "mr" },
+                                label = { Text("Marathi", fontSize = 10.sp) }
+                            )
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
@@ -332,14 +326,14 @@ fun TranslationModelScreen(
                             scope.launch {
                                 val result = TextFlowApplication.instance.translationManager.translateText(
                                     inputText = testInput,
-                                    sourceLang = if (testInput.any { it in '\u0900'..'\u097F' }) "hi" else "hinglish",
-                                    targetLang = "en"
+                                    sourceLang = testSourceLang,
+                                    targetLang = testTargetLang
                                 )
                                 result.onSuccess {
                                     testResult = it
                                     isTestingTranslation = false
                                 }.onFailure {
-                                    testResult = "Error: ${it.localizedMessage}"
+                                    testResult = "Status: ${it.localizedMessage}"
                                     isTestingTranslation = false
                                 }
                             }
@@ -355,12 +349,12 @@ fun TranslationModelScreen(
                         } else {
                             Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Translate to English")
+                            Text("Translate Offline")
                         }
                     }
 
                     if (testResult.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -369,7 +363,7 @@ fun TranslationModelScreen(
                         ) {
                             Column {
                                 Text(
-                                    text = "Converted English Output:",
+                                    text = "Translation Result (${if (testTargetLang == "mr") "Marathi" else "English"}):",
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -384,14 +378,14 @@ fun TranslationModelScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // Technology & Transparency Notice
+            // Privacy Notice
             OutlinedCard(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.Security,
@@ -401,16 +395,16 @@ fun TranslationModelScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Non-AI, 100% On-Device Translation",
+                            text = "Tribal Language Sovereignty & Privacy",
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                         )
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "TextFlow uses local machine translation running strictly on your phone's processor. No cloud subscriptions, no ChatGPT, no OpenAI, no Gemini APIs, and no server roundtrips. Once the model is installed, your speech translates completely without an internet connection.",
+                        text = "Gondi and Kolami translations are processed strictly on your local hardware using open-source linguistic models. No audio or text leaves your device, respecting community data privacy.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 20.sp
+                        lineHeight = 18.sp
                     )
                 }
             }
@@ -421,14 +415,116 @@ fun TranslationModelScreen(
 }
 
 @Composable
-fun PresetChip(text: String, onClick: (String) -> Unit) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .clickable { onClick(text) }
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+fun LanguagePackCard(
+    title: String,
+    subtitle: String,
+    sizeMb: Int,
+    isInstalled: Boolean,
+    downloadStatus: TribalDownloadStatus,
+    isTribal: Boolean,
+    onDownload: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (isInstalled) SuccessGreen.copy(alpha = 0.4f)
+            else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+        )
     ) {
-        Text(text = text, fontSize = 11.sp, maxLines = 1)
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isInstalled) SuccessGreen.copy(alpha = 0.15f)
+                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isInstalled) Icons.Default.CheckCircle else Icons.Default.Download,
+                            contentDescription = null,
+                            tint = if (isInstalled) SuccessGreen else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                            if (isTribal) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(MaterialTheme.colorScheme.tertiary)
+                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                ) {
+                                    Text("TRIBAL", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                            }
+                        }
+                        Text(
+                            text = "$subtitle • ~$sizeMb MB",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                if (isInstalled) {
+                    IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteOutline,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                } else {
+                    Button(
+                        onClick = onDownload,
+                        modifier = Modifier.height(34.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Download", fontSize = 11.sp)
+                    }
+                }
+            }
+
+            if (downloadStatus is TribalDownloadStatus.Downloading) {
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { downloadStatus.progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(CircleShape)
+                )
+            }
+        }
     }
 }

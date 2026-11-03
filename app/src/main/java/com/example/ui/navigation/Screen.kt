@@ -6,6 +6,7 @@ sealed class Screen(val route: String) {
     object OverlayPermission : Screen("overlay_permission")
     object MicPermission : Screen("mic_permission")
     object TranslationModel : Screen("translation_model")
+    object TribalTesting : Screen("tribal_testing")
     object History : Screen("history")
     object Settings : Screen("settings")
 }

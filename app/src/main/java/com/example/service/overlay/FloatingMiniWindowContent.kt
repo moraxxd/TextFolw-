@@ -11,7 +11,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,7 +33,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.Input
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Remove
@@ -44,8 +44,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -73,6 +71,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.languages.SourceLanguage
+import com.example.data.languages.TargetLanguage
 import com.example.ui.theme.MicRecordingGlow
 import com.example.ui.theme.MicRecordingRed
 import com.example.ui.theme.PrimaryDark
@@ -97,6 +97,7 @@ fun FloatingMiniWindowContent(
     onSourceLangChange: (String) -> Unit,
     onTargetLangChange: (String) -> Unit,
     onTranslatedTextEdited: (String) -> Unit,
+    onInsertText: (String) -> Unit,
     onCopyText: (String) -> Unit,
     onShareText: (String) -> Unit,
     onClearAll: () -> Unit,
@@ -106,13 +107,17 @@ fun FloatingMiniWindowContent(
     onRequestImeFocus: () -> Unit
 ) {
     var copiedConfirmation by remember { mutableStateOf(false) }
+    var insertedConfirmation by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+
+    val currentSource = SourceLanguage.fromCode(sourceLanguage)
+    val currentTarget = TargetLanguage.fromCode(targetLanguage)
 
     TextFlowTheme(darkTheme = true) {
         Surface(
             modifier = Modifier
-                .widthIn(max = 380.dp)
-                .fillMaxWidth(0.95f)
+                .widthIn(max = 390.dp)
+                .fillMaxWidth(0.96f)
                 .shadow(elevation = 16.dp, shape = RoundedCornerShape(24.dp))
                 .border(
                     width = 1.dp,
@@ -136,7 +141,7 @@ fun FloatingMiniWindowContent(
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Header Bar with Drag handle, Brand & Window Controls
+                // Header Bar with Brand & Window Controls
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -161,16 +166,34 @@ fun FloatingMiniWindowContent(
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "TextFlow",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                if (currentSource.isTribal) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(MaterialTheme.colorScheme.tertiary)
+                                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                                    ) {
+                                        Text(
+                                            text = "TRIBAL",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
                             Text(
-                                text = "TextFlow",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp
-                                ),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Voice-to-Text & Translate",
+                                text = "Tribal Voice-to-Text & Translate",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -210,68 +233,108 @@ fun FloatingMiniWindowContent(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Language Selector Chips
+                // Source Languages (Scrollable row with tribal indicators)
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Speak In (Source):",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        if (currentSource.isTribal) {
+                            Text(
+                                text = currentSource.region,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Tribal languages first
+                        LanguageChip(
+                            label = "गोण्डी (Gondi)",
+                            selected = sourceLanguage == "gon",
+                            isTribalBadge = true,
+                            onClick = { onSourceLangChange("gon") }
+                        )
+                        LanguageChip(
+                            label = "कोलामी (Kolami)",
+                            selected = sourceLanguage == "kfb",
+                            isTribalBadge = true,
+                            onClick = { onSourceLangChange("kfb") }
+                        )
+                        LanguageChip(
+                            label = "हिन्दी (Hindi)",
+                            selected = sourceLanguage == "hi",
+                            isTribalBadge = false,
+                            onClick = { onSourceLangChange("hi") }
+                        )
+                        LanguageChip(
+                            label = "मराठी (Marathi)",
+                            selected = sourceLanguage == "mr",
+                            isTribalBadge = false,
+                            onClick = { onSourceLangChange("mr") }
+                        )
+                        LanguageChip(
+                            label = "English",
+                            selected = sourceLanguage == "en",
+                            isTribalBadge = false,
+                            onClick = { onSourceLangChange("en") }
+                        )
+                        LanguageChip(
+                            label = "Hinglish",
+                            selected = sourceLanguage == "hinglish",
+                            isTribalBadge = false,
+                            onClick = { onSourceLangChange("hinglish") }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Target Language Selector (English or Marathi)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "From:",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        LanguageChip(
-                            label = "Hindi",
-                            selected = sourceLanguage == "hi",
-                            onClick = { onSourceLangChange("hi") }
-                        )
-                        LanguageChip(
-                            label = "Hinglish",
-                            selected = sourceLanguage == "hinglish",
-                            onClick = { onSourceLangChange("hinglish") }
-                        )
-                        LanguageChip(
-                            label = "English",
-                            selected = sourceLanguage == "en",
-                            onClick = { onSourceLangChange("en") }
-                        )
-                    }
-
-                    Icon(
-                        imageVector = Icons.Default.SwapHoriz,
-                        contentDescription = "Language Direction",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
+                    Text(
+                        text = "Translate To (Output):",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.secondary
                     )
 
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "To:",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         LanguageChip(
                             label = "English",
                             selected = targetLanguage == "en",
+                            isTribalBadge = false,
                             onClick = { onTargetLangChange("en") }
                         )
                         LanguageChip(
-                            label = "Hindi",
-                            selected = targetLanguage == "hi",
-                            onClick = { onTargetLangChange("hi") }
+                            label = "मराठी (Marathi)",
+                            selected = targetLanguage == "mr",
+                            isTribalBadge = false,
+                            onClick = { onTargetLangChange("mr") }
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Microphone & Live Audio Waveform Section
                 RecordingSection(
@@ -281,7 +344,7 @@ fun FloatingMiniWindowContent(
                     onToggleListening = onToggleListening
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Offline Model Warning Banner if missing
                 if (!isModelDownloaded && (sourceLanguage == "hi" || sourceLanguage == "hinglish" || targetLanguage == "hi")) {
@@ -308,7 +371,7 @@ fun FloatingMiniWindowContent(
                                     color = MaterialTheme.colorScheme.onTertiaryContainer
                                 )
                                 Text(
-                                    text = "Download Hindi pack (~30MB) for offline conversion",
+                                    text = "Download language pack for offline conversion",
                                     style = MaterialTheme.typography.bodySmall,
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer
@@ -350,7 +413,7 @@ fun FloatingMiniWindowContent(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Recognized (${if (sourceLanguage == "hi") "Hindi" else if (sourceLanguage == "hinglish") "Hinglish" else "English"}):",
+                                    text = "Recognized (${currentSource.displayName}):",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -374,7 +437,7 @@ fun FloatingMiniWindowContent(
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
-                // Converted English Output (Editable TextField)
+                // Converted Output Box (Editable)
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -382,7 +445,7 @@ fun FloatingMiniWindowContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Converted Text (${if (targetLanguage == "en") "English" else "Hindi"}):",
+                            text = "Converted (${currentTarget.displayName}):",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                             color = MaterialTheme.colorScheme.secondary
                         )
@@ -412,14 +475,14 @@ fun FloatingMiniWindowContent(
                         onValueChange = onTranslatedTextEdited,
                         placeholder = {
                             Text(
-                                text = "Converted text will appear here. Tap to edit or copy...",
+                                text = "Converted text appears here. Tap to edit or insert...",
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(90.dp)
+                            .height(88.dp)
                             .testTag("translated_text_input")
                             .clickable { onRequestImeFocus() },
                         textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
@@ -433,20 +496,58 @@ fun FloatingMiniWindowContent(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                // Bottom Action Buttons: Copy, Share, Clear
+                // Bottom Action Buttons: Insert Text, Copy Text, Share, Clear
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Copy Button (Primary)
+                    val textToActOn = if (translatedText.isNotBlank()) translatedText else recognizedText
+                    val hasText = textToActOn.isNotBlank()
+
+                    // 1. Insert Text Button (Direct to active chat via InputMethodService)
                     Button(
                         onClick = {
-                            val textToCopy = if (translatedText.isNotBlank()) translatedText else recognizedText
-                            if (textToCopy.isNotBlank()) {
-                                onCopyText(textToCopy)
+                            if (hasText) {
+                                onInsertText(textToActOn)
+                                insertedConfirmation = true
+                                coroutineScope.launch {
+                                    delay(2000)
+                                    insertedConfirmation = false
+                                }
+                            }
+                        },
+                        enabled = hasText,
+                        modifier = Modifier
+                            .weight(1.1f)
+                            .height(44.dp)
+                            .testTag("btn_insert_text"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (insertedConfirmation) SuccessGreen else MaterialTheme.colorScheme.primary,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(
+                            imageVector = if (insertedConfirmation) Icons.Default.Check else Icons.Default.Input,
+                            contentDescription = "Insert text",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (insertedConfirmation) "Inserted!" else "Insert",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+
+                    // 2. Copy Text Button (Copies to ClipboardManager)
+                    Button(
+                        onClick = {
+                            if (hasText) {
+                                onCopyText(textToActOn)
                                 copiedConfirmation = true
                                 coroutineScope.launch {
                                     delay(2000)
@@ -454,14 +555,14 @@ fun FloatingMiniWindowContent(
                                 }
                             }
                         },
-                        enabled = translatedText.isNotBlank() || recognizedText.isNotBlank(),
+                        enabled = hasText,
                         modifier = Modifier
                             .weight(1f)
                             .height(44.dp)
                             .testTag("btn_copy_final_text"),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (copiedConfirmation) SuccessGreen else MaterialTheme.colorScheme.primary,
+                            containerColor = if (copiedConfirmation) SuccessGreen else MaterialTheme.colorScheme.secondary,
                             contentColor = Color.White
                         )
                     ) {
@@ -470,27 +571,27 @@ fun FloatingMiniWindowContent(
                             contentDescription = "Copy text",
                             modifier = Modifier.size(16.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = if (copiedConfirmation) "Copied!" else "Copy Text",
+                            text = if (copiedConfirmation) "Copied!" else "Copy",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
+                            fontSize = 12.sp
                         )
                     }
 
-                    // Share Button
+                    // 3. Share Button
                     OutlinedButton(
                         onClick = {
-                            val textToShare = if (translatedText.isNotBlank()) translatedText else recognizedText
-                            if (textToShare.isNotBlank()) {
-                                onShareText(textToShare)
+                            if (hasText) {
+                                onShareText(textToActOn)
                             }
                         },
-                        enabled = translatedText.isNotBlank() || recognizedText.isNotBlank(),
+                        enabled = hasText,
                         modifier = Modifier
-                            .height(44.dp)
+                            .size(44.dp)
                             .testTag("btn_share_text"),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Share,
@@ -499,14 +600,15 @@ fun FloatingMiniWindowContent(
                         )
                     }
 
-                    // Clear Button
+                    // 4. Clear Button
                     OutlinedButton(
                         onClick = onClearAll,
-                        enabled = translatedText.isNotBlank() || recognizedText.isNotBlank(),
+                        enabled = hasText,
                         modifier = Modifier
-                            .height(44.dp)
+                            .size(44.dp)
                             .testTag("btn_clear_text"),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.DeleteOutline,
@@ -524,14 +626,19 @@ fun FloatingMiniWindowContent(
 fun LanguageChip(
     label: String,
     selected: Boolean,
+    isTribalBadge: Boolean = false,
     onClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
             .background(
-                if (selected) MaterialTheme.colorScheme.primaryContainer
-                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                if (selected) {
+                    if (isTribalBadge) MaterialTheme.colorScheme.tertiary
+                    else MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                }
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -540,8 +647,12 @@ fun LanguageChip(
             text = label,
             fontSize = 11.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-            else MaterialTheme.colorScheme.onSurfaceVariant
+            color = if (selected) {
+                if (isTribalBadge) Color.White
+                else MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            }
         )
     }
 }

@@ -1,6 +1,10 @@
 package com.example.data.translation
 
 import android.content.Context
+import com.example.data.languages.SourceLanguage
+import com.example.data.languages.TargetLanguage
+import com.example.data.translation.tribal.TribalModelManager
+import com.example.data.translation.tribal.TribalTranslationEngine
 import com.google.android.gms.tasks.Task
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.common.model.RemoteModelManager
@@ -9,12 +13,10 @@ import com.google.mlkit.nl.translate.TranslateRemoteModel
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
@@ -29,9 +31,15 @@ class OfflineTranslationManager(private val context: Context) {
 
     private val modelManager by lazy { RemoteModelManager.getInstance() }
     private val hindiModel by lazy { TranslateRemoteModel.Builder(TranslateLanguage.HINDI).build() }
+    private val marathiModel by lazy { TranslateRemoteModel.Builder(TranslateLanguage.MARATHI).build() }
+
+    val tribalEngine = TribalTranslationEngine()
+    val tribalModelManager = TribalModelManager(context)
 
     private var hindiToEnglishTranslator: Translator? = null
     private var englishToHindiTranslator: Translator? = null
+    private var marathiToEnglishTranslator: Translator? = null
+    private var hindiToMarathiTranslator: Translator? = null
 
     private val _hindiModelStatus = MutableStateFlow<ModelDownloadState>(ModelDownloadState.NotDownloaded)
     val hindiModelStatus: StateFlow<ModelDownloadState> = _hindiModelStatus.asStateFlow()
@@ -109,42 +117,85 @@ class OfflineTranslationManager(private val context: Context) {
     }
 
     fun deleteHindiModel(onComplete: () -> Unit = {}) {
-        modelManager.deleteDownloadedModel(hindiModel)
-            .addOnCompleteListener {
-                hindiToEnglishTranslator?.close()
-                hindiToEnglishTranslator = null
-                englishToHindiTranslator?.close()
-                englishToHindiTranslator = null
-                _hindiModelStatus.value = ModelDownloadState.NotDownloaded
-                onComplete()
-            }
+        try {
+            modelManager.deleteDownloadedModel(hindiModel)
+                .addOnCompleteListener {
+                    hindiToEnglishTranslator?.close()
+                    hindiToEnglishTranslator = null
+                    englishToHindiTranslator?.close()
+                    englishToHindiTranslator = null
+                    _hindiModelStatus.value = ModelDownloadState.NotDownloaded
+                    onComplete()
+                }
+        } catch (e: Exception) {
+            _hindiModelStatus.value = ModelDownloadState.NotDownloaded
+            onComplete()
+        }
     }
 
     /**
      * Translates input text offline on device.
-     * Supports Hindi -> English, English -> Hindi, and Hinglish transliteration handling.
+     * Supports:
+     * - Gondi -> English & Marathi
+     * - Kolami -> English & Marathi
+     * - Hindi -> English & Marathi
+     * - Marathi -> English
+     * - Hinglish -> English & Marathi
      */
     suspend fun translateText(
         inputText: String,
-        sourceLang: String = "hi", // "hi", "en", "hinglish"
+        sourceLang: String = "hi",
         targetLang: String = "en",
         autoPunctuate: Boolean = true
     ): Result<String> {
         val trimmed = inputText.trim()
         if (trimmed.isEmpty()) return Result.success("")
 
-        val isDownloaded = isModelDownloadedSync()
-        if (!isDownloaded && (sourceLang == "hi" || targetLang == "hi" || sourceLang == "hinglish")) {
-            return Result.failure(
-                IllegalStateException("Hindi offline translation model is not downloaded. Please download it from Settings or the Model Setup screen.")
-            )
+        val source = SourceLanguage.fromCode(sourceLang)
+        val target = TargetLanguage.fromCode(targetLang)
+
+        // 1. Handle Tribal Languages: Gondi & Kolami
+        if (source == SourceLanguage.GONDI || source == SourceLanguage.KOLAMI) {
+            val isInstalled = if (source == SourceLanguage.GONDI) {
+                tribalModelManager.isGondiInstalled.first()
+            } else {
+                tribalModelManager.isKolamiInstalled.first()
+            }
+
+            if (!isInstalled) {
+                return Result.failure(
+                    IllegalStateException("${source.displayName} offline pack is not installed. Please download it from Model Setup.")
+                )
+            }
+
+            return tribalEngine.translate(trimmed, source, target, autoPunctuate)
         }
 
-        // Prepare text for translation - if Hinglish, normalize common Romanized Hindi phonetics
+        // 2. Handle Marathi source
+        if (source == SourceLanguage.MARATHI) {
+            val tribalResult = tribalEngine.translate(trimmed, source, target, autoPunctuate)
+            if (tribalResult.isSuccess) {
+                return tribalResult
+            }
+        }
+
+        // 3. Handle Standard Hindi / Hinglish translation via local ML Kit
         val textToTranslate = if (sourceLang == "hinglish") {
             HinglishPreprocessor.normalizeHinglish(trimmed)
         } else {
             trimmed
+        }
+
+        val isDownloaded = isModelDownloadedSync()
+        if (!isDownloaded && (sourceLang == "hi" || targetLang == "hi" || sourceLang == "hinglish")) {
+            // Check if tribal lexicon can parse this directly before giving error
+            val fallbackResult = tribalEngine.translate(textToTranslate, SourceLanguage.HINDI, target, autoPunctuate)
+            if (fallbackResult.isSuccess) {
+                return fallbackResult
+            }
+            return Result.failure(
+                IllegalStateException("Hindi offline model is not downloaded. Please download it from the Model Setup screen.")
+            )
         }
 
         initTranslators()
@@ -189,34 +240,23 @@ class OfflineTranslationManager(private val context: Context) {
 
     private suspend fun isModelDownloadedSync(): Boolean {
         return suspendCancellableCoroutine { continuation ->
-            modelManager.isModelDownloaded(hindiModel)
-                .addOnSuccessListener { if (continuation.isActive) continuation.resume(it) }
-                .addOnFailureListener { if (continuation.isActive) continuation.resume(false) }
+            try {
+                modelManager.isModelDownloaded(hindiModel)
+                    .addOnSuccessListener { if (continuation.isActive) continuation.resume(it) }
+                    .addOnFailureListener { if (continuation.isActive) continuation.resume(false) }
+            } catch (e: Throwable) {
+                if (continuation.isActive) continuation.resume(false)
+            }
         }
     }
 
-    /**
-     * Post-process translated text:
-     * - Capitalize first letter of every sentence.
-     * - Fix spacing around punctuation.
-     * - Remove redundant whitespaces.
-     * - Ensure terminating punctuation.
-     */
     fun formatAndPunctuate(input: String): String {
         if (input.isBlank()) return ""
-
         var text = input.trim()
-
-        // Clean extra spaces
         text = text.replace(Regex("\\s+"), " ")
-
-        // Fix spaces before punctuation: "word , word" -> "word, word"
         text = text.replace(Regex("\\s+([.,!?:;])"), "$1")
-
-        // Ensure single space after punctuation if followed by a letter: "word,word" -> "word, word"
         text = text.replace(Regex("([.,!?:;])([A-Za-z0-9])"), "$1 $2")
 
-        // Capitalize first letter of each sentence (. ! ?)
         val sentences = text.split(Regex("(?<=[.!?])\\s+"))
         val formatted = sentences.joinToString(" ") { sentence ->
             val s = sentence.trim()
@@ -227,15 +267,12 @@ class OfflineTranslationManager(private val context: Context) {
             }
         }
 
-        // Add trailing period if none exists and string ends with alphanumeric
-        val finalResult = if (formatted.isNotEmpty() && !formatted.endsWith(".") &&
+        return if (formatted.isNotEmpty() && !formatted.endsWith(".") &&
             !formatted.endsWith("?") && !formatted.endsWith("!")) {
             "$formatted."
         } else {
             formatted
         }
-
-        return finalResult
     }
 
     fun close() {
@@ -243,5 +280,7 @@ class OfflineTranslationManager(private val context: Context) {
         hindiToEnglishTranslator = null
         englishToHindiTranslator?.close()
         englishToHindiTranslator = null
+        marathiToEnglishTranslator?.close()
+        marathiToEnglishTranslator = null
     }
 }

@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,8 +28,11 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FormatQuote
+import androidx.compose.material.icons.filled.Input
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Translate
@@ -65,6 +71,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.TextFlowApplication
+import com.example.data.languages.SourceLanguage
+import com.example.data.languages.TargetLanguage
 import com.example.ui.MainViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -75,7 +83,8 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     viewModel: MainViewModel,
     onNavigateBack: () -> Unit,
-    onNavigateToModelManager: () -> Unit
+    onNavigateToModelManager: () -> Unit,
+    onNavigateToTribalTesting: () -> Unit
 ) {
     val context = LocalContext.current
     val sourceLang by viewModel.sourceLanguage.collectAsState()
@@ -116,8 +125,8 @@ fun SettingsScreen(
         ) {
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Section 1: Languages
-            SettingsSectionHeader(title = "Languages & Translation")
+            // Section 1: Languages & Tribal Linguistics
+            SettingsSectionHeader(title = "Languages & Tribal Support")
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
@@ -128,8 +137,11 @@ fun SettingsScreen(
                         icon = Icons.Default.Translate,
                         title = "Default Source Language",
                         subtitle = when (sourceLang) {
+                            "gon" -> "गोण्डी (Gondi) - Tribal Central Dravidian"
+                            "kfb" -> "कोलामी (Kolami) - Tribal Dravidian"
                             "hi" -> "Hindi (हिंदी)"
-                            "hinglish" -> "Hinglish (Hindi in English Script)"
+                            "mr" -> "Marathi (मराठी)"
+                            "hinglish" -> "Hinglish (Mix)"
                             else -> "English (en-IN)"
                         },
                         onClick = { showSourceLangDialog = true }
@@ -138,14 +150,21 @@ fun SettingsScreen(
                     SettingsRow(
                         icon = Icons.Default.Translate,
                         title = "Default Output Language",
-                        subtitle = if (targetLang == "en") "English (US / Global)" else "Hindi (हिंदी)",
+                        subtitle = if (targetLang == "mr") "मराठी (Marathi)" else "English (US / Global)",
                         onClick = { showTargetLangDialog = true }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
                     SettingsRow(
+                        icon = Icons.Default.RecordVoiceOver,
+                        title = "Tribal Language Native Evaluation",
+                        subtitle = "Test Gondi & Kolami dialects and native accuracy",
+                        onClick = onNavigateToTribalTesting
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    SettingsRow(
                         icon = Icons.Default.Download,
-                        title = "Offline Translation Pack",
-                        subtitle = "Manage Hindi-English offline engine",
+                        title = "Offline Language Models",
+                        subtitle = "Manage Gondi, Kolami, and Hindi offline packs",
                         onClick = onNavigateToModelManager
                     )
                 }
@@ -153,7 +172,29 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Section 2: Floating Overlay & Controls
+            // Section 2: Direct Text Insertion (Keyboard IME)
+            SettingsSectionHeader(title = "Text Insertion & Keyboard")
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    SettingsRow(
+                        icon = Icons.Default.Keyboard,
+                        title = "TextFlow Keyboard Settings",
+                        subtitle = "Enable TextFlow Keyboard to insert in 1 tap without pasting",
+                        onClick = {
+                            val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
+                            context.startActivity(intent)
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Section 3: Floating Overlay & Controls
             SettingsSectionHeader(title = "Floating Overlay")
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -188,7 +229,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Section 3: Speech & Formatting
+            // Section 4: Speech & Formatting
             SettingsSectionHeader(title = "Voice & Formatting")
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -199,7 +240,7 @@ fun SettingsScreen(
                     SettingsSwitchRow(
                         icon = Icons.Default.FormatQuote,
                         title = "Auto Capitalize & Punctuate",
-                        subtitle = "Format English sentences with capitalization and periods",
+                        subtitle = "Format English and Marathi sentences with capitalization and periods",
                         checked = autoPunctuation,
                         onCheckedChange = { viewModel.setAutoPunctuationPref(it) }
                     )
@@ -207,7 +248,7 @@ fun SettingsScreen(
                     SettingsSwitchRow(
                         icon = Icons.Default.Vibration,
                         title = "Haptic Feedback",
-                        subtitle = "Vibrate on mic start, stop, and text copy",
+                        subtitle = "Vibrate on mic start, stop, copy, and text insertion",
                         checked = hapticEnabled,
                         onCheckedChange = { viewModel.setHapticPref(it) }
                     )
@@ -216,7 +257,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Section 4: Appearance & System
+            // Section 5: Appearance
             SettingsSectionHeader(title = "Appearance")
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -237,7 +278,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Section 5: Privacy & Data
+            // Section 6: Privacy & Data
             SettingsSectionHeader(title = "Privacy & Data")
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -248,7 +289,7 @@ fun SettingsScreen(
                     SettingsRow(
                         icon = Icons.Default.Security,
                         title = "Privacy Policy & Zero-Tracking",
-                        subtitle = "100% on-device translation • No cloud profiling",
+                        subtitle = "100% on-device tribal models • No cloud profiling",
                         onClick = { showPrivacyDialog = true }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
@@ -268,7 +309,10 @@ fun SettingsScreen(
     // Source Lang Dialog
     if (showSourceLangDialog) {
         val options = listOf(
+            "gon" to "गोण्डी (Gondi) - Tribal Language",
+            "kfb" to "कोलामी (Kolami) - Tribal Language",
             "hi" to "Hindi (हिंदी)",
+            "mr" to "Marathi (मराठी)",
             "hinglish" to "Hinglish (Conversational Mix)",
             "en" to "English (Indian / International)"
         )
@@ -311,8 +355,8 @@ fun SettingsScreen(
     // Target Lang Dialog
     if (showTargetLangDialog) {
         val options = listOf(
-            "en" to "English (Default)",
-            "hi" to "Hindi (हिंदी)"
+            "en" to "English",
+            "mr" to "मराठी (Marathi)"
         )
         AlertDialog(
             onDismissRequest = { showTargetLangDialog = false },
@@ -440,16 +484,16 @@ fun SettingsScreen(
     if (showPrivacyDialog) {
         AlertDialog(
             onDismissRequest = { showPrivacyDialog = false },
-            title = { Text("TextFlow Privacy Policy") },
+            title = { Text("TextFlow Tribal Privacy Guarantee") },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     Text(
-                        text = "TextFlow is built with complete user privacy as its core principle:\n\n" +
-                                "1. No Secret Recording: Audio is strictly captured only when you explicitly press the microphone icon.\n\n" +
-                                "2. Local Machine Translation: Translation runs on-device via local ML models. No text is sent to OpenAI, Gemini, or third-party servers.\n\n" +
-                                "3. No External APIs: Does not use paid third-party translation APIs.\n\n" +
-                                "4. No Screen Sniffing: The overlay window does not read or intercept text from WhatsApp, Instagram, or other apps.\n\n" +
-                                "5. Local Storage: History is stored strictly in your device's private SQLite database and can be erased anytime.",
+                        text = "TextFlow Tribal Language Guarantee:\n\n" +
+                                "1. Tribal Language Sovereignty: Gondi and Kolami speech and lexical data are processed 100% locally on your hardware.\n\n" +
+                                "2. Zero Cloud Recordings: Microphones are only accessed during explicit user speech dictation.\n\n" +
+                                "3. No Third-Party Cloud APIs: No data is sent to OpenAI, Gemini, ChatGPT, or external commercial translation APIs.\n\n" +
+                                "4. Direct Keyboard Insertion: Uses Android's native InputMethodService to insert text directly into WhatsApp or Telegram without intercepting background messages.\n\n" +
+                                "5. Full User Control: All local model packs and history entries can be inspected or deleted at any time.",
                         style = MaterialTheme.typography.bodySmall,
                         lineHeight = 18.sp
                     )

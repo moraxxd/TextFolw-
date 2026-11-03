@@ -188,6 +188,7 @@ class TextFlowOverlayService : Service() {
 
             result.onSuccess { output ->
                 translatedText = output
+                com.example.service.ime.TextFlowInputMethodService.pendingInsertText.value = output
                 isTranslating = false
                 if (isFinal && output.isNotBlank()) {
                     // Save to Room Database
@@ -451,6 +452,10 @@ class TextFlowOverlayService : Service() {
                     },
                     onTranslatedTextEdited = { newText ->
                         translatedText = newText
+                        com.example.service.ime.TextFlowInputMethodService.pendingInsertText.value = newText
+                    },
+                    onInsertText = { text ->
+                        insertIntoActiveApp(text)
                     },
                     onCopyText = { text ->
                         copyToClipboard(text)
@@ -517,6 +522,23 @@ class TextFlowOverlayService : Service() {
                     else -> "en-IN"
                 }
             )
+        }
+    }
+
+    private fun insertIntoActiveApp(text: String) {
+        triggerHapticFeedback()
+        com.example.service.ime.TextFlowInputMethodService.pendingInsertText.value = text
+        val inserted = com.example.service.ime.TextFlowInputMethodService.insertDirectly(text)
+        if (inserted) {
+            Toast.makeText(this, "Inserted into active chat!", Toast.LENGTH_SHORT).show()
+        } else {
+            // Direct insertion fallback to copy as required by specification
+            copyToClipboard(text)
+            Toast.makeText(
+                this,
+                "Copied to clipboard! (Enable 'TextFlow Keyboard' in Settings to insert directly)",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
