@@ -1,0 +1,25 @@
+# Core Web Framework
+fastapi>=0.110.0,<1.0.0
+uvicorn[standard]>=0.28.0,<1.0.0
+pydantic>=2.6.0,<3.0.0
+pydantic-settings>=2.2.0,<3.0.0
+python-multipart>=0.0.9
+
+# Numerical & Audio Processing
+numpy>=1.24.0,<2.0.0
+scipy>=1.11.0,<2.0.0
+soundfile>=0.12.1
+
+# HTTP & Utilities
+requests>=2.31.0
+httpx>=0.27.0
+aiofiles>=23.2.1
+
+# Open-Source Speech Recognition & Translation Runtime
+# In production with GPU/CUDA or optimized CPU:
+# pip install faster-whisper ctranslate2 transformers sentencepiece torch
+# For base container lightness, these are imported with fallback to acoustic/lexicon engine:
+# faster-whisper>=1.0.0
+# ctranslate2>=4.0.0
+# transformers>=4.38.0
+# sentencepiece>=0.2.0

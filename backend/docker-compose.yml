@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  textflow-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: textflow_tribal_server
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=TextFlow Self-Hosted Tribal Language Server
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEVICE=cpu
+      - COMPUTE_TYPE=int8
+      - MODELS_DIR=/app/models
+    volumes:
+      # Mount model weights directory for persistent Hugging Face / CTranslate2 checkpoints
+      - ./models:/app/models
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

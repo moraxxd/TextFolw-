@@ -44,11 +44,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isFloatingServiceActive = MutableStateFlow(false)
     val isFloatingServiceActive: StateFlow<Boolean> = _isFloatingServiceActive.asStateFlow()
 
+    // Online connectivity & Server configuration
+    val isOnline: StateFlow<Boolean> = app.networkMonitor.observeIsOnline()
+        .stateIn(viewModelScope, SharingStarted.Lazily, app.networkMonitor.isOnline)
+
+    val serverUrl: StateFlow<String> = prefs.serverUrl
+        .stateIn(viewModelScope, SharingStarted.Lazily, com.example.data.preferences.UserPreferencesRepository.DEFAULT_SERVER_URL)
+
+    sealed class ServerHealthState {
+        object Idle : ServerHealthState()
+        object Checking : ServerHealthState()
+        data class Connected(
+            val appName: String,
+            val version: String,
+            val device: String,
+            val tribalLangs: List<String>
+        ) : ServerHealthState()
+        data class Error(val message: String) : ServerHealthState()
+    }
+
+    private val _serverHealthState = MutableStateFlow<ServerHealthState>(ServerHealthState.Idle)
+    val serverHealthState: StateFlow<ServerHealthState> = _serverHealthState.asStateFlow()
+
     // Model Download State
     val modelDownloadState: StateFlow<ModelDownloadState> = translationManager.hindiModelStatus
 
     // Preferences
-    val sourceLanguage = prefs.sourceLanguage.stateIn(viewModelScope, SharingStarted.Lazily, "hi")
+    val sourceLanguage = prefs.sourceLanguage.stateIn(viewModelScope, SharingStarted.Lazily, "gon")
     val targetLanguage = prefs.targetLanguage.stateIn(viewModelScope, SharingStarted.Lazily, "en")
     val bubbleSize = prefs.bubbleSize.stateIn(viewModelScope, SharingStarted.Lazily, "medium")
     val hapticEnabled = prefs.hapticEnabled.stateIn(viewModelScope, SharingStarted.Lazily, true)
@@ -258,6 +280,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setAutoPunctuationPref(enabled: Boolean) = viewModelScope.launch { prefs.setAutoPunctuation(enabled) }
     fun setOnboardingCompleted(completed: Boolean) = viewModelScope.launch { prefs.setOnboardingCompleted(completed) }
     fun setThemeModePref(mode: String) = viewModelScope.launch { prefs.setThemeMode(mode) }
+
+    fun updateServerUrl(url: String) {
+        viewModelScope.launch {
+            prefs.setServerUrl(url)
+            testServerConnection(url)
+        }
+    }
+
+    fun testServerConnection(url: String? = null) {
+        val targetUrl = url ?: serverUrl.value
+        viewModelScope.launch {
+            _serverHealthState.value = ServerHealthState.Checking
+            try {
+                val api = app.apiClientManager.getApi(targetUrl)
+                val health = withContext(Dispatchers.IO) {
+                    api.checkHealth()
+                }
+                _serverHealthState.value = ServerHealthState.Connected(
+                    appName = health.appName,
+                    version = health.version,
+                    device = health.device,
+                    tribalLangs = health.tribalLanguagesRegistered ?: listOf("gon", "kfb")
+                )
+            } catch (e: Exception) {
+                _serverHealthState.value = ServerHealthState.Error(
+                    e.localizedMessage ?: "Failed to connect to self-hosted server"
+                )
+            }
+        }
+    }
 
     override fun onCleared() {
         super.onCleared()

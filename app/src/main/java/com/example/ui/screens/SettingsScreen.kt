@@ -24,8 +24,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.Input
@@ -37,6 +40,7 @@ import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -48,12 +52,14 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
+import com.example.ui.theme.SuccessGreen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -94,12 +100,18 @@ fun SettingsScreen(
     val autoPunctuation by viewModel.autoPunctuation.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
 
+    val serverUrl by viewModel.serverUrl.collectAsState()
+    val serverHealthState by viewModel.serverHealthState.collectAsState()
+    val isOnline by viewModel.isOnline.collectAsState()
+
     var showSourceLangDialog by remember { mutableStateOf(false) }
     var showTargetLangDialog by remember { mutableStateOf(false) }
     var showBubbleSizeDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
+    var showServerUrlDialog by remember { mutableStateOf(false) }
+    var tempServerUrl by remember(serverUrl) { mutableStateOf(serverUrl) }
 
     Scaffold(
         topBar = {
@@ -167,6 +179,69 @@ fun SettingsScreen(
                         subtitle = "Manage Gondi, Kolami, and Hindi offline packs",
                         onClick = onNavigateToModelManager
                     )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Section 2: Self-Hosted Server Configuration (Zero-Commercial AI)
+            SettingsSectionHeader(title = "Self-Hosted Server (Zero-Commercial AI)")
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    SettingsRow(
+                        icon = Icons.Default.Cloud,
+                        title = "Backend Server URL",
+                        subtitle = serverUrl,
+                        onClick = {
+                            tempServerUrl = serverUrl
+                            showServerUrlDialog = true
+                        }
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Server Status",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                            )
+                            Text(
+                                text = when (serverHealthState) {
+                                    is MainViewModel.ServerHealthState.Idle -> if (isOnline) "Ready to test (Online)" else "Device is Offline (Internet required)"
+                                    is MainViewModel.ServerHealthState.Checking -> "Connecting to self-hosted server..."
+                                    is MainViewModel.ServerHealthState.Connected -> {
+                                        val c = serverHealthState as MainViewModel.ServerHealthState.Connected
+                                        "Connected: ${c.appName} (v${c.version}, ${c.device.uppercase()})"
+                                    }
+                                    is MainViewModel.ServerHealthState.Error -> {
+                                        val e = serverHealthState as MainViewModel.ServerHealthState.Error
+                                        "Error: ${e.message}"
+                                    }
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = when (serverHealthState) {
+                                    is MainViewModel.ServerHealthState.Connected -> SuccessGreen
+                                    is MainViewModel.ServerHealthState.Error -> MaterialTheme.colorScheme.error
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
+                        Button(
+                            onClick = { viewModel.testServerConnection() },
+                            modifier = Modifier.testTag("test_server_btn")
+                        ) {
+                            Text("Test")
+                        }
+                    }
                 }
             }
 
@@ -527,6 +602,51 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showClearHistoryDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Server URL Dialog
+    if (showServerUrlDialog) {
+        AlertDialog(
+            onDismissRequest = { showServerUrlDialog = false },
+            title = { Text("Configure Self-Hosted Server") },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter the address of your private self-hosted TextFlow backend. Use 'http://10.0.2.2:8000/' for emulator, or your server's LAN IP / domain.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = tempServerUrl,
+                        onValueChange = { tempServerUrl = it },
+                        label = { Text("Server Base URL") },
+                        placeholder = { Text("http://10.0.2.2:8000/") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val trimmed = tempServerUrl.trim()
+                        if (trimmed.isNotBlank()) {
+                            viewModel.updateServerUrl(trimmed)
+                            showServerUrlDialog = false
+                            Toast.makeText(context, "Server URL saved", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) {
+                    Text("Save & Connect")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showServerUrlDialog = false }) {
                     Text("Cancel")
                 }
             }

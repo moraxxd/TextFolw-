@@ -25,6 +25,12 @@ class UserPreferencesRepository(private val context: Context) {
         val KEY_BUBBLE_X = intPreferencesKey("bubble_x")
         val KEY_BUBBLE_Y = intPreferencesKey("bubble_y")
         val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
+        val KEY_SERVER_URL = stringPreferencesKey("server_url")
+        const val DEFAULT_SERVER_URL = "http://10.0.2.2:8000/"
+    }
+
+    val serverUrl: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_SERVER_URL] ?: DEFAULT_SERVER_URL
     }
 
     val sourceLanguage: Flow<String> = context.dataStore.data.map { prefs ->
@@ -94,5 +100,10 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setThemeMode(mode: String) {
         context.dataStore.edit { it[KEY_THEME_MODE] = mode }
+    }
+
+    suspend fun setServerUrl(url: String) {
+        val cleanUrl = if (!url.endsWith("/")) "$url/" else url
+        context.dataStore.edit { it[KEY_SERVER_URL] = cleanUrl }
     }
 }

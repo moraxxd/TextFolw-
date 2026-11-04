@@ -1,6 +1,6 @@
 {
   "name": "TextFlow",
-  "description": "Speak Naturally. Write Freely. Floating voice-to-text and offline translation overlay for chat apps.",
+  "description": "Floating voice-to-text and tribal language translation overlay for chat apps (Gondi, Kolami, Hindi, Marathi).",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

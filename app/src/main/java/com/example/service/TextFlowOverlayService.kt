@@ -34,7 +34,10 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.example.MainActivity
 import com.example.R
 import com.example.TextFlowApplication
+import com.example.data.api.models.TranslationRequestDto
 import com.example.data.db.TranslationHistoryItem
+import com.example.data.languages.SourceLanguage
+import com.example.data.languages.TargetLanguage
 import com.example.data.translation.ModelDownloadState
 import com.example.service.overlay.FloatingBubbleContent
 import com.example.service.overlay.FloatingMiniWindowContent
@@ -43,11 +46,17 @@ import com.example.service.speech.SpeechRecognitionManager
 import com.example.service.speech.SpeechRecognitionState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
 import kotlin.math.abs
 
 class TextFlowOverlayService : Service() {
@@ -131,43 +140,7 @@ class TextFlowOverlayService : Service() {
 
     private fun initListeners() {
         serviceScope.launch {
-            speechManager.recognitionState.collect { state ->
-                when (state) {
-                    is SpeechRecognitionState.Idle -> {
-                        isListening = false
-                        statusText = "Ready to speak"
-                    }
-                    is SpeechRecognitionState.Ready -> {
-                        isListening = true
-                        statusText = "Listening... Speak naturally"
-                    }
-                    is SpeechRecognitionState.Listening -> {
-                        isListening = true
-                        statusText = "Listening... Speak naturally"
-                    }
-                    is SpeechRecognitionState.PartialResult -> {
-                        isListening = true
-                        recognizedText = state.text
-                        statusText = "Transcribing speech..."
-                        // Trigger fast partial translation
-                        translateCurrentSpeech(state.text)
-                    }
-                    is SpeechRecognitionState.FinalResult -> {
-                        isListening = false
-                        recognizedText = state.text
-                        statusText = "Speech recognized"
-                        translateCurrentSpeech(state.text, isFinal = true)
-                    }
-                    is SpeechRecognitionState.Error -> {
-                        isListening = false
-                        statusText = state.message
-                    }
-                }
-            }
-        }
-
-        serviceScope.launch {
-            speechManager.soundLevel.collect { level ->
+            TextFlowApplication.instance.audioRecorder.soundLevel.collect { level ->
                 soundLevel = level
             }
         }
@@ -175,26 +148,37 @@ class TextFlowOverlayService : Service() {
 
     private fun translateCurrentSpeech(text: String, isFinal: Boolean = false) {
         if (text.isBlank()) return
+        val app = TextFlowApplication.instance
+        if (!app.networkMonitor.isOnline) {
+            statusText = "Offline: Internet connection required"
+            Toast.makeText(this, "Internet connection required for TextFlow online tribal translation", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         serviceScope.launch {
             isTranslating = true
-            val app = TextFlowApplication.instance
+            val serverUrl = app.preferencesRepository.serverUrl.first()
             val autoPunctuate = app.preferencesRepository.autoPunctuation.first()
-            val result = app.translationManager.translateText(
-                inputText = text,
-                sourceLang = sourceLanguage,
-                targetLang = targetLanguage,
-                autoPunctuate = autoPunctuate
-            )
-
-            result.onSuccess { output ->
-                translatedText = output
-                com.example.service.ime.TextFlowInputMethodService.pendingInsertText.value = output
+            try {
+                val api = app.apiClientManager.getApi(serverUrl)
+                val request = TranslationRequestDto(
+                    text = text,
+                    sourceLang = sourceLanguage,
+                    targetLang = targetLanguage,
+                    autoPunctuate = autoPunctuate
+                )
+                val response = withContext(Dispatchers.IO) {
+                    api.translateText(request)
+                }
+                translatedText = response.translatedText
+                com.example.service.ime.TextFlowInputMethodService.pendingInsertText.value = response.translatedText
+                statusText = "${response.engineUsed} (${response.processingTimeMs.toInt()}ms)"
                 isTranslating = false
-                if (isFinal && output.isNotBlank()) {
-                    // Save to Room Database
+
+                if (isFinal && response.translatedText.isNotBlank()) {
                     val historyItem = TranslationHistoryItem(
                         originalText = text,
-                        translatedText = output,
+                        translatedText = response.translatedText,
                         sourceLanguage = sourceLanguage,
                         targetLanguage = targetLanguage
                     )
@@ -202,10 +186,11 @@ class TextFlowOverlayService : Service() {
                         app.database.historyDao().insert(historyItem)
                     }
                 }
-            }.onFailure { ex ->
+            } catch (e: Exception) {
                 isTranslating = false
+                statusText = "Server error: ${e.localizedMessage ?: "Translation failed"}"
                 if (translatedText.isBlank()) {
-                    translatedText = text // fallback preview
+                    translatedText = text
                 }
             }
         }
@@ -502,26 +487,100 @@ class TextFlowOverlayService : Service() {
     }
 
     private fun minimizeToBubble() {
-        speechManager.stopListening()
+        if (isListening) {
+            TextFlowApplication.instance.audioRecorder.stopRecording()
+            isListening = false
+        }
         showBubble()
     }
 
     private fun toggleListening() {
         triggerHapticFeedback()
+        val app = TextFlowApplication.instance
+        if (!app.networkMonitor.isOnline) {
+            Toast.makeText(this, "Internet connection required for TextFlow online tribal translation", Toast.LENGTH_LONG).show()
+            statusText = "Offline: Internet connection required"
+            return
+        }
+
         if (isListening) {
-            speechManager.stopListening()
             isListening = false
-            statusText = "Speech processing..."
+            statusText = "Stopping recording & processing on self-hosted server..."
+            val recordedFile = app.audioRecorder.stopRecording()
+            if (recordedFile != null && recordedFile.exists() && recordedFile.length() > 0) {
+                uploadAndProcessAudio(recordedFile)
+            } else {
+                statusText = "No audio recorded"
+            }
         } else {
             recognizedText = ""
             translatedText = ""
-            speechManager.startListening(
-                when (sourceLanguage) {
-                    "hi" -> "hi-IN"
-                    "hinglish" -> "hinglish"
-                    else -> "en-IN"
+            val srcLangName = SourceLanguage.fromCode(sourceLanguage).displayName
+            statusText = "Listening ($srcLangName)... Tap mic when done"
+            val audioFile = app.audioRecorder.startRecording()
+            if (audioFile != null) {
+                isListening = true
+            } else {
+                statusText = "Microphone error. Check permissions."
+            }
+        }
+    }
+
+    private fun uploadAndProcessAudio(audioFile: File) {
+        serviceScope.launch {
+            isTranslating = true
+            statusText = "Uploading audio to self-hosted server..."
+            val app = TextFlowApplication.instance
+            val serverUrl = app.preferencesRepository.serverUrl.first()
+            val autoPunctuate = app.preferencesRepository.autoPunctuation.first()
+
+            try {
+                val api = app.apiClientManager.getApi(serverUrl)
+                val requestFile = audioFile.asRequestBody("audio/*".toMediaTypeOrNull())
+                val filePart = MultipartBody.Part.createFormData("file", audioFile.name, requestFile)
+                val srcPart = sourceLanguage.toRequestBody("text/plain".toMediaTypeOrNull())
+                val tgtPart = targetLanguage.toRequestBody("text/plain".toMediaTypeOrNull())
+                val autoPunctuatePart = autoPunctuate.toString().toRequestBody("text/plain".toMediaTypeOrNull())
+
+                val response = withContext(Dispatchers.IO) {
+                    api.processAudio(
+                        file = filePart,
+                        sourceLang = srcPart,
+                        targetLang = tgtPart,
+                        autoPunctuate = autoPunctuatePart
+                    )
                 }
-            )
+
+                recognizedText = response.transcription
+                translatedText = response.translatedText
+                com.example.service.ime.TextFlowInputMethodService.pendingInsertText.value = response.translatedText
+                statusText = "${response.asrEngine} → ${response.translationEngine} (${response.totalProcessingMs.toInt()}ms)"
+                isTranslating = false
+
+                if (response.translatedText.isNotBlank()) {
+                    val historyItem = TranslationHistoryItem(
+                        originalText = response.transcription,
+                        translatedText = response.translatedText,
+                        sourceLanguage = sourceLanguage,
+                        targetLanguage = targetLanguage
+                    )
+                    withContext(Dispatchers.IO) {
+                        app.database.historyDao().insert(historyItem)
+                    }
+                }
+            } catch (e: Exception) {
+                isTranslating = false
+                statusText = "Server connection error: ${e.localizedMessage ?: "Failed to reach backend"}"
+                Toast.makeText(
+                    this@TextFlowOverlayService,
+                    "Cannot reach server at $serverUrl: ${e.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } finally {
+                try {
+                    if (audioFile.exists()) audioFile.delete()
+                } catch (ignored: Exception) {}
+            }
         }
     }
 
@@ -622,6 +681,7 @@ class TextFlowOverlayService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         isServiceRunning = false
+        TextFlowApplication.instance.audioRecorder.stopRecording()
         speechManager.cancel()
         removeViews()
         overlayLifecycleOwner?.destroy()

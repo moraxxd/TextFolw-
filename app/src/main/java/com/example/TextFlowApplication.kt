@@ -16,6 +16,12 @@ class TextFlowApplication : Application() {
         private set
     lateinit var translationManager: OfflineTranslationManager
         private set
+    lateinit var networkMonitor: com.example.data.api.NetworkMonitor
+        private set
+    lateinit var apiClientManager: com.example.data.api.ApiClientManager
+        private set
+    lateinit var audioRecorder: com.example.data.audio.AudioRecorderManager
+        private set
 
     companion object {
         const val OVERLAY_NOTIFICATION_CHANNEL_ID = "textflow_overlay_channel"
@@ -32,6 +38,9 @@ class TextFlowApplication : Application() {
         database = AppDatabase.getInstance(this)
         preferencesRepository = UserPreferencesRepository(this)
         translationManager = OfflineTranslationManager(this)
+        networkMonitor = com.example.data.api.NetworkMonitor(this)
+        apiClientManager = com.example.data.api.ApiClientManager()
+        audioRecorder = com.example.data.audio.AudioRecorderManager(this)
 
         createNotificationChannel()
     }

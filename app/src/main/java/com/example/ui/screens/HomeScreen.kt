@@ -117,6 +117,8 @@ fun HomeScreen(
 
     val sourceLang by viewModel.sourceLanguage.collectAsState()
     val targetLang by viewModel.targetLanguage.collectAsState()
+    val isOnline by viewModel.isOnline.collectAsState()
+    val serverUrl by viewModel.serverUrl.collectAsState()
 
     val isListening by viewModel.inAppListening.collectAsState()
     val soundLevel by viewModel.inAppSoundLevel.collectAsState()
@@ -275,6 +277,67 @@ fun HomeScreen(
                         contentDescription = "Test Bench",
                         tint = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Self-Hosted Server Online Status Banner
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onNavigateToSettings),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isOnline)
+                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+                    else
+                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
+                ),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isOnline) MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f)
+                    else MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(if (isOnline) SuccessGreen else MaterialTheme.colorScheme.error)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = if (isOnline) "Self-Hosted Online Server Connected" else "Offline: Internet Connection Required",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (isOnline) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            Text(
+                                text = "Zero Commercial AI • 100% Private ASR & Translation ($serverUrl)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Config",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             }
